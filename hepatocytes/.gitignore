@@ -1,0 +1,3 @@
+# ignore all .hdf5 files
+*.hdf5
+*.pyc

@@ -1,0 +1,6 @@
+fpdf
+h5py>=2.10
+scikit-image>=0.19.2
+numpy
+pandas
+matplotlib>=3.2.1
