@@ -1,0 +1,5 @@
+# ignore large data files
+*.hdf5
+*.pkl
+*.npy
+*.pyc

@@ -2,6 +2,7 @@ import tensorflow as tf
 import matplotlib.pyplot as plt
 import skimage.io as skio
 import skimage.transform as trans
+import numpy as np
 import json
 
 
