@@ -3,3 +3,6 @@
 *.pkl
 *.npy
 *.pyc
+*.sbatch
+results/*
+output/*
