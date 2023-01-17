@@ -7,34 +7,21 @@ from utils import *
 from unet import unet
 from unet3 import unet3
 from unet_3plus import UNet_3Plus, UNet_3Plus_DeepSup, UNet_3Plus_DeepSup_CGM
+from dataloaders import get_test_generator
 
-
-def get_test_generator(test_df, batch_size=3, target_size=(256,256), seed=1, image_color_mode="grayscale"):
-    # Define ImageDataGenerator for testing images
-    test_gen_args = dict(rescale=1./255.)
-    test_datagen = ImageDataGenerator(**test_gen_args)
-    test_generator = test_datagen.flow_from_dataframe(dataframe = test_df,
-                                                x_col = "images",
-                                                y_col = None,
-                                                batch_size = batch_size,
-                                                seed = 1,
-                                                class_mode = None,
-                                                color_mode = image_color_mode,
-                                                target_size = target_size,
-                                                shuffle=False)
-
-    test_step_size = test_generator.n // test_generator.batch_size
-
-    return test_generator, test_step_size
+from neptune.new.types import File
+from neptune_config import config_run
 
 
 def get_args():
     parser = argparse.ArgumentParser(description='Test the trained model on images and masks')
     parser.add_argument('--batch-size', '-b', dest='batch_size', type=int, default=1, help='Batch size')
-    parser.add_argument('--test-data', '-d', dest='test_data', type=str, default='data/test_df.pkl',
+    parser.add_argument('--unet-type', '-u', dest='unet_type', default='v0',
+                        help='Choose UNet type vo:unet, v1:unet3+, v2:unet3+ with deep supervision, v3:unet3+ with cgm)')
+    parser.add_argument('--test-data', '-d', dest='test_data', type=str, default='../dataset/test_df.pkl',
                         help='File name of the dataframe that contains test image paths')
-    parser.add_argument('--model-path', '-p', dest='model_path', type=str, default='../trained_models',
-                        help='Path to save the trained model')
+    parser.add_argument('--model-path', '-m', dest='model_path', type=str, default='../trained_models',
+                        help='Path to the trained model')
     parser.add_argument('--model-name', '-n', dest='model_name', type=str, required=True,
                         help='Name of the trained model to be tested')
     
@@ -45,43 +32,56 @@ def get_hyperparameter():
     args = get_args()
     target_size = (256,256)
     seed = 1
-    image_color_mode = "grayscale"
+    input_shape = [256, 256, 1]
+    output_channels = 1
 
-    return args, target_size, seed, image_color_mode
-    
-
-def get_unet3_para():
-    # U-net 3plus model
-    INPUT_SHAPE = [256, 256, 1]
-    OUTPUT_CHANNELS = 1
+    return args, target_size, seed, input_shape, output_channels
 
 
 def predict_model():
-    args, target_size, seed, image_color_mode = get_hyperparameter()
+    args, target_size, seed, input_shape, output_channels = get_hyperparameter()
+    threshold = 0.5
+
+    run = config_run()
+    run["sys/name"] = args.model_name
+    run["sys/unet_type"] = args.unet_type
+    
     # Load test_df
     test_df = pd.read_pickle(args.test_data)
 
     # load the pretrained model
     model_file = os.path.join(args.model_path, args.model_name + ".hdf5")
-    model = unet(model_file)
 
-    #model = UNet_3Plus(INPUT_SHAPE, OUTPUT_CHANNELS, model_file)
-    #model = UNet_3Plus_DeepSup(INPUT_SHAPE, OUTPUT_CHANNELS, model_file)
+    # Load U-net model based on version
+    if args.unet_type == 'v0':
+        model = unet(model_file)
+    elif args.unet_type == 'v1':
+        model = UNet_3Plus(input_shape, output_channels, model_file)
+    elif args.unet_type == 'v2':
+        model = UNet_3Plus_DeepSup(input_shape, output_channels, model_file)
+    else:
+        model = UNet_3Plus_DeepSup_CGM(input_shape, output_channels, model_file)
 
     # Testing the model
-    test_generator, test_step_size = get_test_generator(test_df, args.batch_size, target_size, seed, image_color_mode)
+    test_generator, test_step_size = get_test_generator(test_df, args.batch_size, target_size, seed)
 
     # Predict and save the results as numpy array
     test_generator.reset()
-    results = model.predict(test_generator, steps=test_step_size, verbose=1)
-    #print(np.max(results), np.min(results), np.mean(results))
-    #print(type(results), len(results), results[0].shape, results[1].shape)
+    pred = model.predict(test_generator, steps=test_step_size, verbose=1)
+    results = pred > threshold
 
     # Visualize the result test images from each stack
     img_lst = [0, 6, 10, 60, 85, 88, 148, 337, 451, 472, 502]
-    for i in img_lst:
-        plt.imsave(os.path.join("results/", args.model_name+"_%d_predict.png"%i), results[0][i][:,:,0])
+    save_path = os.path.join('results', args.unet_type, args.model_name)
+    if not os.path.exists(save_path):
+        os.makedirs(save_path)
+    #print(save_path, len(results), results[0].shape, results[0][:,:,0].shape)
+    for i in range(len(results)):
+        file_path = os.path.join(save_path, "%d.png"%i)
+        plt.imsave(file_path, results[i][:,:,0])
+        run["train/predictions"].log(File(file_path))
 
+    run.stop()
     # test one image
     #plt.imsave(os.path.join("results/", model_name+"_test.png"), results[0][0][:,:,0])
 

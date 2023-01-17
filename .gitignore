@@ -4,5 +4,11 @@
 *.npy
 *.pyc
 *.sbatch
+*.ipynb
+.neptune/*
+.ipynb_checkpoints/*
 results/*
 output/*
+unet3.py
+train_unet3.py
+U_Net3.ipynb
