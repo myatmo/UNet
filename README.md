@@ -1,4 +1,4 @@
-# Training UNet version with Fatchecker dataset
+# Training UNet versions on Fatchecker dataset
 
 Training Unet, Unet3+, Unet3+ with deep supervision and Unet3+ with CGM on Fatchecker dataset
 
